@@ -44,14 +44,14 @@ TrueConf Server (the TrueConf Server for Linux installer) from the TrueConf webs
 > Administrator (root) privileges are required to run the command.
 
 ```sh
-curl -LsSf https://raw.githubusercontent.com/TrueConf/trueconf-server-linux-autoinstaller/refs/heads/master/install.sh | sudo bash
+curl -LsSf https://trueconf.com/go/install.sh | sudo bash
 ```
 
 or with args:
 
 ```sh
 # 1.
-curl -LsSf https://raw.githubusercontent.com/TrueConf/trueconf-server-linux-autoinstaller/refs/heads/master/install.sh -o install.sh
+curl -LsSf https://trueconf.com/go/install.sh -o install.sh
 
 # 2.
 sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--help] [--version] 

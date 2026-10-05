@@ -44,14 +44,14 @@
 > Команда требует прав администратора для выполнения.
 
 ```sh
-curl -LsSf https://raw.githubusercontent.com/TrueConf/trueconf-server-linux-autoinstaller/refs/heads/master/install.sh | sudo bash
+curl -LsSf https://trueconf.ru/go/install.sh | sudo bash
 ```
 
 или запустите с аргументами:
 
 ```sh
 # 1.
-curl -LsSf https://raw.githubusercontent.com/TrueConf/trueconf-server-linux-autoinstaller/refs/heads/master/install.sh -o install.sh
+curl -LsSf https://trueconf.ru/go/install.sh -o install.sh
 
 # 2.
 sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--help] [--version] 
