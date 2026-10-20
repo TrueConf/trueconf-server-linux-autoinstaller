@@ -13,6 +13,14 @@
 # Версия скрипта (хардкод) / Script version (hardcoded)
 SCRIPT_VERSION="1.1"
 
+# Привилегированные команды запускаются через sudo, если скрипт запущен
+# не от root. Пустая строка — уже root, sudo не нужен.
+if [[ "$(id -u)" -eq 0 ]] 2>/dev/null; then
+  SUDO=""
+else
+  SUDO="sudo"
+fi
+
 # ============================================================================
 # i18n
 # ============================================================================
@@ -31,7 +39,7 @@ MSG_RU=(
   [msg_step_install]="Установка TrueConf Server"
   [msg_step_port_apply]="Настройка порта панели управления"
 
-  [msg_err_root]="Скрипт необходимо запускать от имени root: sudo bash install.sh"
+  [msg_err_root]="Требуются права администратора: установите sudo или запустите скрипт от root"
   [msg_err_os_unsupported]="Операционная система не поддерживается TrueConf Server."
   [msg_supported_os_list]="Поддерживаемые ОС: Debian 11/12/13, CentOS Stream 9, Astra Linux SE 1.7/1.8, РЕД ОС 7.3/8, Альт Сервер 10/c10f2/11 (64-битные)."
   [msg_err_arch]="Поддерживается только 64-битная архитектура (x86_64)."
@@ -99,7 +107,7 @@ MSG_EN=(
   [msg_step_install]="Installing TrueConf Server"
   [msg_step_port_apply]="Configuring web panel port"
 
-  [msg_err_root]="Run the script as root: sudo bash install.sh"
+  [msg_err_root]="Administrator privileges required: install sudo or run the script as root"
   [msg_err_os_unsupported]="Operating system is not supported by TrueConf Server."
   [msg_supported_os_list]="Supported OS: Debian 11/12/13, CentOS Stream 9, Astra Linux SE 1.7/1.8, RED OS 7.3/8, ALT Server 10/c10f2/11 (64-bit)."
   [msg_err_arch]="Only 64-bit architecture (x86_64) is supported."
@@ -417,12 +425,12 @@ commit_tmp_file() {
   mode="$(stat -c %a "$target" 2>/dev/null || true)"
   owner="$(stat -c %U "$target" 2>/dev/null || true)"
   group="$(stat -c %G "$target" 2>/dev/null || true)"
-  mv "$tmp" "$target" || { rm -f "$tmp"; lmsg msg_err_write "$target" >&2; return 1; }
-  if [[ -n "$mode" ]] && ! chmod "$mode" "$target" 2>/dev/null; then
+  $SUDO mv "$tmp" "$target" || { rm -f "$tmp"; lmsg msg_err_write "$target" >&2; return 1; }
+  if [[ -n "$mode" ]] && ! $SUDO chmod "$mode" "$target" 2>/dev/null; then
     lmsg msg_err_filemode "$target" >&2
   fi
   if [[ -n "$owner" && -n "$group" ]]; then
-    chown "$owner:$group" "$target" 2>/dev/null || true
+    $SUDO chown "$owner:$group" "$target" 2>/dev/null || true
   fi
 }
 
@@ -520,8 +528,7 @@ fix_apt_repos() {
   # 1. комментируем активные медиа-строки
   for f in "${files[@]}"; do
     [[ -f "$f" ]] || continue
-    tmp="$f.tcs.tmp"
-    : > "$tmp"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/tcs-repo.XXXXXX")" || { lmsg msg_err_write "$f" >&2; return 1; }
     changed=0
     while IFS= read -r line || [[ -n "$line" ]]; do
       if [[ "$line" =~ $media_re ]] && [[ "$line" != \#* ]]; then
@@ -545,8 +552,7 @@ fix_apt_repos() {
     local -a uncommented_list=()
     for f in "${files[@]}"; do
       [[ -f "$f" ]] || continue
-      tmp="$f.tcs.tmp"
-      : > "$tmp"
+      tmp="$(mktemp "${TMPDIR:-/tmp}/tcs-repo.XXXXXX")" || { lmsg msg_err_write "$f" >&2; return 1; }
       changed=0
       while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" =~ $uncomment_re && ( -z "$required" || "$line" == *"$required"* ) ]]; then
@@ -712,8 +718,7 @@ fix_dnf_repos() {
   for f in "${files[@]}"; do
     [[ -f "$f" ]] || continue
     mapfile -t media_sections < <(_dnf_media_sections "$f")
-    tmp="$f.tcs.tmp"
-    : > "$tmp"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/tcs-repo.XXXXXX")" || { lmsg msg_err_write "$f" >&2; return 1; }
     changed=0
     while IFS= read -r line || [[ -n "$line" ]]; do
       if [[ "$line" =~ ^[[:space:]]*\[ ]]; then
@@ -745,8 +750,7 @@ fix_dnf_repos() {
     for f in "${files[@]}"; do
       [[ -f "$f" ]] || continue
       mapfile -t media_sections < <(_dnf_media_sections "$f")
-      tmp="$f.tcs.tmp"
-      : > "$tmp"
+      tmp="$(mktemp "${TMPDIR:-/tmp}/tcs-repo.XXXXXX")" || { lmsg msg_err_write "$f" >&2; return 1; }
       changed=0
       while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" =~ ^[[:space:]]*\[ ]]; then
@@ -799,7 +803,7 @@ fix_dnf_repos() {
 
 # prepare_centos — установка EPEL для CentOS (нужен для зависимостей TCSL).
 prepare_centos() {
-  dnf install -y epel-release || return 1
+  $SUDO dnf install -y epel-release || return 1
   return 0
 }
 
@@ -808,13 +812,13 @@ update_packages() {
   case "${OS_FAMILY:-}" in
     apt)
       case "${OS_ID:-}" in
-        astra)    apt-get update && apt-get upgrade --enable-upgrade -y && apt-get install -y curl gnupg2 ;;
-        altlinux) apt-get update -y && apt-get install -y curl gnupg ;;
-        *)        apt-get update && apt-get upgrade -y && apt-get install -y curl gnupg2 ;;
+        astra)    $SUDO apt-get update && $SUDO apt-get upgrade --enable-upgrade -y && $SUDO apt-get install -y curl gnupg2 ;;
+        altlinux) $SUDO apt-get update -y && $SUDO apt-get install -y curl gnupg ;;
+        *)        $SUDO apt-get update && $SUDO apt-get upgrade -y && $SUDO apt-get install -y curl gnupg2 ;;
       esac
       ;;
     dnf)
-      dnf update -y && dnf install -y curl
+      $SUDO dnf update -y && $SUDO dnf install -y curl
       ;;
     *) return 1 ;;
   esac
@@ -826,8 +830,8 @@ update_packages() {
 ensure_curl() {
   command -v curl >/dev/null 2>&1 && return 0
   case "${OS_FAMILY:-}" in
-    apt) apt-get install -y curl || return 1 ;;
-    dnf) dnf install -y curl || return 1 ;;
+    apt) $SUDO apt-get install -y curl || return 1 ;;
+    dnf) $SUDO dnf install -y curl || return 1 ;;
     *)   return 1 ;;
   esac
 }
@@ -1050,18 +1054,18 @@ install_tcsl() {
   case "${OS_FAMILY:-}" in
     apt)
       if [[ -n "${OPT_ADMINS:-}" ]]; then
-        TCADMINS_USERS="$OPT_ADMINS" DEBIAN_FRONTEND=noninteractive apt-get install -y "$file" \
+        $SUDO env TCADMINS_USERS="$OPT_ADMINS" DEBIAN_FRONTEND=noninteractive apt-get install -y "$file" \
           || { lmsg msg_err_install >&2; return 1; }
       else
-        DEBIAN_FRONTEND=noninteractive apt-get install -y "$file" \
+        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y "$file" \
           || { lmsg msg_err_install >&2; return 1; }
       fi
       ;;
     dnf)
       if [[ -n "${OPT_ADMINS:-}" ]]; then
-        TCADMINS_USERS="$OPT_ADMINS" dnf install -y "$file" || { lmsg msg_err_install >&2; return 1; }
+        $SUDO env TCADMINS_USERS="$OPT_ADMINS" dnf install -y "$file" || { lmsg msg_err_install >&2; return 1; }
       else
-        dnf install -y "$file" || { lmsg msg_err_install >&2; return 1; }
+        $SUDO dnf install -y "$file" || { lmsg msg_err_install >&2; return 1; }
       fi
       ;;
     *) lmsg msg_err_install >&2; return 1 ;;
@@ -1074,8 +1078,8 @@ install_tcsl() {
 # Без цели — msg_err_no_listen; запись через commit_tmp_file.
 _rewrite_file() {
   local file="$1" transform="$2"
-  local tmp="$file.tcs.tmp" line out done=0
-  : > "$tmp"
+  local tmp line out done=0
+  tmp="$(mktemp "${TMPDIR:-/tmp}/tcs-conf.XXXXXX")" || { lmsg msg_err_write "$file" >&2; return 1; }
   while IFS= read -r line || [[ -n "$line" ]]; do
     if out="$("$transform" "$line")"; then
       done=1
@@ -1143,7 +1147,7 @@ configure_port() {
   _rewrite_file "$webconf" _webconf_transform || return 1
   _rewrite_file "$mgrconf" _mgrconf_transform || return 1
 
-  systemctl restart trueconf-manager trueconf-web || return 1
+  $SUDO systemctl restart trueconf-manager trueconf-web || return 1
   lmsg msg_port_apply_done "$port"
 }
 
@@ -1212,6 +1216,15 @@ _on_exit() {
   cleanup_download
 }
 
+# _require_sudo — 1, если нужен sudo, но его нет в PATH
+_require_sudo() {
+  if [[ -n "${SUDO:-}" ]] && ! command -v sudo >/dev/null 2>&1; then
+    lmsg msg_err_root >&2
+    return 1
+  fi
+  return 0
+}
+
 main() {
   set -uo pipefail
 
@@ -1229,10 +1242,8 @@ main() {
     unset DL_DIR TC_APT_FILES TC_DNF_FILES TC_WEB_CONF TC_MGR_CONF
   fi
 
-  if [[ "$(id -u)" -ne 0 ]]; then
-    lmsg msg_err_root >&2
-    exit 1
-  fi
+  # Привилегированные команды идут через sudo: проверяем, что он есть
+  _require_sudo || exit 1
 
   step msg_step_detect_os
   detect_os || exit 1
@@ -1288,6 +1299,7 @@ main() {
   printf '%s\n' "$(_L msg_https_reminder)"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+# запуск из файла (BASH_SOURCE == $0) или из pipe (BASH_SOURCE пуст)
+if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "$0" ]]; then
   main "$@"
 fi
