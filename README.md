@@ -29,7 +29,9 @@
 </p>
 
 The script detects the operating system, prepares the system, and installs
-TrueConf Server (the TrueConf Server for Linux installer) from the TrueConf website (`trueconf.com`).
+TrueConf Server (the TrueConf Server for Linux installer) from the TrueConf website
+(`trueconf.com`; packages for Russian distributions are downloaded from
+`download.trueconf.ru`).
 
 ## Supported operating systems (x86_64)
 
@@ -37,6 +39,9 @@ TrueConf Server (the TrueConf Server for Linux installer) from the TrueConf webs
 |---|---|---|
 | Debian | 11, 12, 13 | .deb |
 | CentOS Stream | 9 | .rpm |
+| Astra Linux SE | 1.7, 1.8 | .deb |
+| RED OS | 7.3, 8 | .rpm |
+| ALT Server | 10, 10.2 (c10f2), 11 | .rpm |
 
 ## Usage
 
@@ -54,16 +59,18 @@ or with args:
 curl -LsSf https://trueconf.com/go/install.sh -o install.sh
 
 # 2.
-sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--help] [--version] 
+sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--allow-env-hooks] [--help] [--version] 
 ```
 
 | Option | Purpose |
 |---|---|
 | `--admin-users=a,b` | OS users with access to the control panel (passed via `TCADMINS_USERS`). Format validation: comma-separated names, up to 32 characters `[A-Za-z0-9_.-]`; spaces around names are ignored |
-| `--yes` | If port 80 is in use, automatically selects the first available port starting from 8888 (without this option, the port must be entered manually) |
-| `--port=NNNN` | Explicitly set the control panel port (digits only, 1–65535; if the port is busy, you are prompted again) |
-| `--file=FILE` | Install from a local file (`.deb`/`.rpm`) without downloading; the file extension must match the OS |
-| `--help` | Show help (the language depends on the OS locale) |
+| `--yes` | Non-interactive mode: no questions are asked. If the port is busy (including the one passed via `--port`), the first available port starting from 8888 is taken automatically |
+| `--port=NNNN` | Explicitly set the control panel port (digits only, 1–65535; if the port is busy, it is requested again, and with `--yes` the first free port from 8888 is taken) |
+| `--file=FILE` | Install from a local file (`.deb`/`.rpm`) without downloading; the file extension must match the OS. A relative path is converted to an absolute one automatically |
+| `--skip-update` | Skip the system package update step (`apt-get upgrade` / `dnf update`); `curl` is installed separately if it is missing |
+| `--allow-env-hooks` | Honor `TC_*`/`DL_DIR` environment overrides (test hooks; ignored unless this option is passed) |
+| `-h, --help` | Show help (the language depends on the OS locale) |
 | `-v, --version` | Display script version |
 
 ## What the script does
@@ -73,23 +80,43 @@ sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=F
    (other than x86_64) results in a message and exit.
 3. Checks that the `trueconf` user does not exist (the installer creates it
    itself) and that TrueConf Server is not already installed.
-4. Checks and fixes repositories — automatically uncomments the required ones.
-5. Updates system packages and installs `curl`. On Debian/Astra — `gnupg2`,
-   on ALT — `gnupg`. For Debian, a safe `upgrade` is used; for Astra —
-   `upgrade --enable-upgrade` (apt on Astra blocks the regular `upgrade`, not
-   `dist-upgrade`).
+4. Checks and fixes repositories: disables local media (CD/DVD) sources and
+   makes the required distribution repositories active. On Debian, the main
+   suite of the detected release must be active — a commented one is
+   uncommented, otherwise an error is raised. On Astra and ALT, an active
+   `deb`/`rpm http(s)` source is required. On CentOS and RED OS, media
+   repositories are disabled and disabled distribution repositories
+   (`baseos`/`appstream`, `base`/`updates`) are enabled inside the `.repo`
+   files (`enabled=1`) even if some other repository is already enabled; at
+   least one enabled http(s) repository is required. EPEL is installed on
+   CentOS.
+5. Unless `--skip-update` is used, updates system packages and installs `curl`.
+   On Debian/Astra — `gnupg2`, on ALT — `gnupg`. On Debian, a safe `upgrade` is
+   used; on Astra — `upgrade --enable-upgrade` (apt on Astra blocks the regular
+   `upgrade`, not `dist-upgrade`). If `curl` is still missing (for example with
+   `--skip-update`), it is installed separately before downloading.
 6. Selects the control panel port. Digits only, range 1–65535; availability is
    checked via `ss -tlnn`/`netstat -tlnn` (numeric output; if neither utility
    is available — an error). If the selected port is busy, the prompt is
    repeated. In `--yes` mode, the first available port starting from 8888 is
    taken; when input is unavailable (EOF, cron/CI), the first available port
    starting from 8888 is taken as well.
-7. Downloads the TrueConf Server for Linux installer from `trueconf.com/download/server/linux`. The
-   download directory is `/tmp/tcs-installer` (resume via `-C -`). Resilient
-   curl: IPv4 only, retries on errors (no `--retry-all-errors` — unavailable
-   in curl < 7.71 on Astra/RED), aborts connections slower than 1 KB/s for
-   30 s. The downloaded file is removed after a successful installation.
-8. Installs TrueConf Server for Linux; panel administrators are set via `TCADMINS_USERS`.
+7. Downloads the TrueConf Server for Linux installer from
+   `trueconf.com/download/server/linux` (for Russian distributions — Astra,
+   RED OS, ALT — from `download.trueconf.ru/download/server/linux`). The
+   download goes into a private temporary directory created with `mktemp -d`
+   (mode 0700). A `DL_DIR` override is honored only with `--allow-env-hooks`
+   and is refused if it is a symlink, is not owned by the current user, or its
+   parent is a symlink. Resilient curl: IPv4 only, resume via `-C -`, retries
+   on errors (no `--retry-all-errors` — unavailable in curl < 7.71 on
+   Astra/RED), aborts connections slower than 1 KB/s for 30 s. If the server
+   returns an HTML page instead of a package, the download is treated as
+   failed. The temporary directory is removed after installation, including on
+   failure.
+8. Installs TrueConf Server for Linux; panel administrators are set via
+   `TCADMINS_USERS`. Package installation runs non-interactively
+   (`DEBIAN_FRONTEND=noninteractive` on apt), so debconf questions never block
+   cron/CI.
 9. If the selected port ≠ 80, it is applied after installation
    (`/opt/trueconf/server/etc/webmanager/listen.conf` and
    `/opt/trueconf/server/etc/manager/manager.toml`) and the services are
@@ -97,7 +124,7 @@ sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=F
    the address/options are preserved (`Listen 80` → `Listen 9000`,
    `Listen 0.0.0.0:80` → `Listen 0.0.0.0:9000`, `Listen 443 ssl` is left
    untouched), as is the connection scheme (`http`/`https`/`ws`). If the target
-   directive is missing, an error is raised without appending duplicates
-   (invalid TOML).
-10. Prints the control panel URL and a registration reminder (Free: TCP port
-    4310 to `reg.trueconf.com`).
+   directive or a configuration file is missing, an error is raised instead of
+   silently skipping the change or appending duplicates (invalid TOML).
+10. Prints the control panel URL, a registration reminder (Free: TCP port
+    4310 to `reg.trueconf.com`) and an HTTPS reminder.

@@ -11,7 +11,7 @@
 #                        [--file=ФАЙЛ] [--version] [--help]
 
 # Версия скрипта (хардкод) / Script version (hardcoded)
-SCRIPT_VERSION="1.0"
+SCRIPT_VERSION="1.1"
 
 # ============================================================================
 # i18n
@@ -70,14 +70,21 @@ MSG_RU=(
   [msg_success]="Установка завершена успешно!"
   [msg_panel_url]="Панель управления: http://%s:%s"
   [msg_register_reminder]="Зарегистрируйте сервер в панели управления. Для версии Free убедитесь, что доступен TCP-порт 4310 до reg.trueconf.com."
+  [msg_update_skipped]="Обновление системных пакетов пропущено (--skip-update)."
+  [msg_https_reminder]="Панель управления работает по HTTP. Для доступа по HTTPS настройте сертификат (раздел «Настройки веб и HTTPS» документации TrueConf)."
+  [msg_err_dl_dir]="Небезопасный каталог загрузки: %s. Проверьте права и владельца."
+  [msg_err_filemode]="Не удалось сохранить режим файла: %s."
+  [msg_err_no_conf]="Конфигурационный файл панели не найден: %s. Порт не изменён — проверьте установленный пакет."
 
-  [msg_help]="Использование: sudo bash install.sh [--admin-users=имя1,имя2] [--yes] [--port=NNNN] [--file=ФАЙЛ] [--version] [--help]
+  [msg_help]="Использование: sudo bash install.sh [--admin-users=имя1,имя2] [--yes] [--port=NNNN] [--file=ФАЙЛ] [--skip-update] [--version] [--help]
 
   --admin-users=имя1,имя2  пользователи ОС с доступом к панели управления
   --yes                    без вопросов (при занятом порту 80 берётся первый свободный начиная с 8888)
   --port=NNNN              явно указать порт панели управления
   --file=ФАЙЛ              установка из локального файла без скачивания
   --version, -v            показать версию скрипта
+  --skip-update             не обновлять системные пакеты
+  --allow-env-hooks         учитывать TC_* и DL_DIR из окружения (только для тестов)
   --help                   показать эту справку"
 )
 
@@ -131,14 +138,21 @@ MSG_EN=(
   [msg_success]="Installation completed successfully!"
   [msg_panel_url]="Web panel: http://%s:%s"
   [msg_register_reminder]="Register the server in the web panel. For the Free version, ensure TCP port 4310 to reg.trueconf.com is reachable."
+  [msg_update_skipped]="System package update skipped (--skip-update)."
+  [msg_https_reminder]="The web panel runs over HTTP. To use HTTPS, configure a certificate (see the 'Web and HTTPS settings' section of the TrueConf manual)."
+  [msg_err_dl_dir]="Unsafe download directory: %s. Check permissions and owner."
+  [msg_err_filemode]="Failed to preserve file mode: %s."
+  [msg_err_no_conf]="Web panel configuration file not found: %s. Port was not changed — check the installed package."
 
-  [msg_help]="Usage: sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--version] [--help]
+  [msg_help]="Usage: sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--version] [--help]
 
   --admin-users=user1,user2  OS users with web panel access
   --yes                     non-interactive (if port 80 is busy, first free port from 8888 is used)
   --port=NNNN               explicitly set the web panel port
   --file=FILE               install from a local file, skip downloading
   --version, -v             show script version
+  --skip-update              skip system package update
+  --allow-env-hooks          honor TC_* and DL_DIR env overrides (test hooks only)
   --help                    show this help"
 )
 
@@ -225,6 +239,9 @@ unsupported_os() {
 # ============================================================================
 
 TCDL_BASE="https://trueconf.com/download/server/linux"
+# российские дистрибутивы (Astra, РЕД ОС, Альт) качаем с download.trueconf.ru:
+# trueconf.ru отдаёт HTML-заглушку антибота вместо файла, а этот хост — прямой
+TCDL_BASE_RU="https://download.trueconf.ru/download/server/linux"
 
 # detect_os [FILE] — задаёт OS_ID, OS_VERSION_ID, OS_FAMILY (apt|dnf),
 # OS_PKG_TYPE (deb|rpm), OS_INSTALLER_URL, OS_DISPLAY. 1 при неподдержке.
@@ -278,13 +295,13 @@ detect_os() {
         1.7)
           OS_FAMILY="apt"; OS_PKG_TYPE="deb"
           OS_VERSION_ID="$minor"
-          OS_INSTALLER_URL="$TCDL_BASE/trueconf_server_astralinux_se17_amd64.deb"
+          OS_INSTALLER_URL="$TCDL_BASE_RU/trueconf_server_astralinux_se17_amd64.deb"
           OS_DISPLAY="Astra Linux SE $minor"
           ;;
         1.8)
           OS_FAMILY="apt"; OS_PKG_TYPE="deb"
           OS_VERSION_ID="$minor"
-          OS_INSTALLER_URL="$TCDL_BASE/trueconf_server_astralinux_se18_amd64.deb"
+          OS_INSTALLER_URL="$TCDL_BASE_RU/trueconf_server_astralinux_se18_amd64.deb"
           OS_DISPLAY="Astra Linux SE $minor"
           ;;
         *) return $(unsupported_os) ;;
@@ -298,13 +315,13 @@ detect_os() {
         7.3)
           OS_FAMILY="dnf"; OS_PKG_TYPE="rpm"
           OS_VERSION_ID="7.3"
-          OS_INSTALLER_URL="$TCDL_BASE/trueconf_server_redos7.3_x86_64.rpm"
+          OS_INSTALLER_URL="$TCDL_BASE_RU/trueconf_server_redos7.3_x86_64.rpm"
           OS_DISPLAY="RED OS 7.3"
           ;;
         8|8.*)
           OS_FAMILY="dnf"; OS_PKG_TYPE="rpm"
           OS_VERSION_ID="8"
-          OS_INSTALLER_URL="$TCDL_BASE/trueconf_server_redos8.0_x86_64.rpm"
+          OS_INSTALLER_URL="$TCDL_BASE_RU/trueconf_server_redos8.0_x86_64.rpm"
           OS_DISPLAY="RED OS 8"
           ;;
         *) return $(unsupported_os) ;;
@@ -318,17 +335,17 @@ detect_os() {
           OS_FAMILY="apt"; OS_PKG_TYPE="rpm"
           OS_VERSION_ID="10"
           if [[ "${version,,}" == *c10f2* ]]; then
-            OS_INSTALLER_URL="$TCDL_BASE/trueconf_server_basealt_sp10_x86_64.rpm"
+            OS_INSTALLER_URL="$TCDL_BASE_RU/trueconf_server_basealt_sp10_x86_64.rpm"
             OS_DISPLAY="ALT Server 10 (c10f2)"
           else
-            OS_INSTALLER_URL="$TCDL_BASE/trueconf_server_basealt10_x86_64.rpm"
+            OS_INSTALLER_URL="$TCDL_BASE_RU/trueconf_server_basealt10_x86_64.rpm"
             OS_DISPLAY="ALT Server 10"
           fi
           ;;
         11)
           OS_FAMILY="apt"; OS_PKG_TYPE="rpm"
           OS_VERSION_ID="11"
-          OS_INSTALLER_URL="$TCDL_BASE/trueconf_server_basealt11_x86_64.rpm"
+          OS_INSTALLER_URL="$TCDL_BASE_RU/trueconf_server_basealt11_x86_64.rpm"
           OS_DISPLAY="ALT Server 11"
           ;;
         *) return $(unsupported_os) ;;
@@ -389,7 +406,24 @@ check_not_installed() {
 # commit_tmp_file TMP TARGET — атомарная запись файла; при сбое удаляет TMP
 # и сообщает об ошибке записи. 1 при ошибке.
 commit_tmp_file() {
-  mv "$1" "$2" || { rm -f "$1"; lmsg msg_err_write "$2" >&2; return 1; }
+  local tmp="$1" target="$2"
+  local mode owner group real
+  # если цель — симлинк, правим реальный файл, ссылку не подменяем
+  if [[ -L "$target" ]]; then
+    real="$(readlink -f "$target" 2>/dev/null || true)"
+    [[ -n "$real" && -e "$real" ]] && target="$real"
+  fi
+  # сохраняем права и владельца исходного файла
+  mode="$(stat -c %a "$target" 2>/dev/null || true)"
+  owner="$(stat -c %U "$target" 2>/dev/null || true)"
+  group="$(stat -c %G "$target" 2>/dev/null || true)"
+  mv "$tmp" "$target" || { rm -f "$tmp"; lmsg msg_err_write "$target" >&2; return 1; }
+  if [[ -n "$mode" ]] && ! chmod "$mode" "$target" 2>/dev/null; then
+    lmsg msg_err_filemode "$target" >&2
+  fi
+  if [[ -n "$owner" && -n "$group" ]]; then
+    chown "$owner:$group" "$target" 2>/dev/null || true
+  fi
 }
 
 # _apt_required_active REQUIRED FILES... — 0, если обязательный дистрибутивный
@@ -515,8 +549,7 @@ fix_apt_repos() {
       : > "$tmp"
       changed=0
       while IFS= read -r line || [[ -n "$line" ]]; do
-        if [[ "$line" =~ $uncomment_re ]] \
-            && { [[ -z "$required" ]] || [[ "$line" == *"$required"* ]]; }; then
+        if [[ "$line" =~ $uncomment_re && ( -z "$required" || "$line" == *"$required"* ) ]]; then
           local clean="${line#\#}"
           clean="${clean#"${clean%%[![:space:]]*}"}"
           printf '%s\n' "$clean" >> "$tmp"
@@ -536,14 +569,10 @@ fix_apt_repos() {
     # уведомление о раскомментировании
     if [[ "$uncommented" -gt 0 ]]; then
       lmsg msg_repos_uncommented
-      local u
-      for u in "${uncommented_list[@]}"; do
-        printf '  - %s\n' "$u"
-      done
+      printf '  - %s\n' "${uncommented_list[@]}"
     fi
     # повторная проверка после раскомментирования
-    if [[ "$uncommented" -eq 0 ]] \
-        || ! _apt_required_active "$required" "${files[@]}"; then
+    if [[ "$uncommented" -eq 0 ]] || ! _apt_required_active "$required" "${files[@]}"; then
       local miss="${required:-network repo}"
       [[ "${OS_PKG_TYPE:-}" == "rpm" ]] && [[ -z "$required" ]] && miss="rpm http(s) repo"
       lmsg msg_err_missing_repos "$miss" >&2
@@ -625,6 +654,41 @@ _dnf_has_network_repo() {
   return 1
 }
 
+# _dnf_disabled_distro_repos FILES... — 0, если в файлах есть отключённая
+# секция дистрибутивного репозитория: для CentOS — baseos/appstream,
+# для РЕД ОС — base/updates. Media/debug/source не учитываются.
+# Если подходящих секций нет вовсе — 1 (не блокируем нестандартные системы).
+_dnf_disabled_distro_repos() {
+  local files=("$@")
+  local f line s hdr want
+  local -a ids=() media_sections=()
+  case "${OS_ID:-}" in
+    centos) ids=(baseos appstream) ;;
+    redos)  ids=(base updates) ;;
+    *)      return 1 ;;
+  esac
+  for f in "${files[@]}"; do
+    [[ -f "$f" ]] || continue
+    mapfile -t media_sections < <(_dnf_media_sections "$f")
+    s=""; hdr=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" =~ ^[[:space:]]*\[([^]]+)\] ]]; then
+        s="${BASH_REMATCH[1]}"
+        hdr="$line"
+      elif [[ "$line" =~ ^[[:space:]]*enabled[[:space:]]*=[[:space:]]*(0|1) ]] \
+          && [[ "${BASH_REMATCH[1]}" == "0" && -n "$s" ]]; then
+        _section_is_media "$hdr" && continue
+        s="${s,,}"
+        [[ "$s" == *debug* || "$s" == *source* ]] && continue
+        for want in "${ids[@]}"; do
+          [[ "$s" == *"$want"* ]] && return 0
+        done
+      fi
+    done < "$f"
+  done
+  return 1
+}
+
 # fix_dnf_repos [FILE...] — правит dnf/yum-репозитории:
 #   отключает локальные медиа-репозитории (baseurl=file://), при отсутствии
 #   включённых включает стандартные (кроме debug/source). 1 при ошибке.
@@ -653,7 +717,6 @@ fix_dnf_repos() {
     changed=0
     while IFS= read -r line || [[ -n "$line" ]]; do
       if [[ "$line" =~ ^[[:space:]]*\[ ]]; then
-        section="$line"
         in_media=0
         _section_is_media "$line" && in_media=1
         printf '%s\n' "$line" >> "$tmp"
@@ -672,7 +735,10 @@ fix_dnf_repos() {
   done
 
   # 2. включённый сетевой репозиторий уже есть? (секция без enabled= = включена)
-  if ! _dnf_has_network_repo "${files[@]}"; then
+  #    Дистрибутивные (baseos/appstream, base/updates) включаем и тогда, когда
+  #    какой-то сторонний репозиторий уже включён: иначе базовые зависимости
+  #    (sqlite-libs и др.) не находятся.
+  if ! _dnf_has_network_repo "${files[@]}" || _dnf_disabled_distro_repos "${files[@]}"; then
     # 3. включаем стандартные (не media, не debug/source)
     local enabled_any=0
     local -a enabled_list=()
@@ -710,10 +776,7 @@ fix_dnf_repos() {
     # уведомление о включении стандартных репозиториев
     if [[ "$enabled_any" -gt 0 ]]; then
       lmsg msg_repos_enabled
-      local u
-      for u in "${enabled_list[@]}"; do
-        printf '  - %s\n' "$u"
-      done
+      printf '  - %s\n' "${enabled_list[@]}"
     fi
     if [[ "$enabled_any" -eq 0 ]]; then
       lmsg msg_err_missing_repos "enabled http(s) repo" >&2
@@ -724,13 +787,18 @@ fix_dnf_repos() {
     lmsg msg_err_missing_repos "enabled http(s) repo" >&2
     return 1
   fi
+  # дистрибутивные репозитории должны остаться включёнными
+  if _dnf_disabled_distro_repos "${files[@]}"; then
+    local miss="baseos/appstream"
+    [[ "${OS_ID:-}" == "redos" ]] && miss="base/updates"
+    lmsg msg_err_missing_repos "$miss" >&2
+    return 1
+  fi
   return 0
 }
 
-# prepare_centos — отключение SELinux и установка EPEL для CentOS Stream
+# prepare_centos — установка EPEL для CentOS (нужен для зависимостей TCSL).
 prepare_centos() {
-  sed -i 's/^SELINUX=.*/SELINUX=disabled/g' "${TC_SELINUX_CONF:-/etc/selinux/config}" || return 1
-  setenforce 0 2>/dev/null || true
   dnf install -y epel-release || return 1
   return 0
 }
@@ -749,6 +817,18 @@ update_packages() {
       dnf update -y && dnf install -y curl
       ;;
     *) return 1 ;;
+  esac
+}
+
+# ensure_curl — гарантирует наличие curl перед скачиванием. Актуально при
+# --skip-update: на минимальной системе curl может отсутствовать, и скачивание
+# упало бы с невнятной ошибкой.
+ensure_curl() {
+  command -v curl >/dev/null 2>&1 && return 0
+  case "${OS_FAMILY:-}" in
+    apt) apt-get install -y curl || return 1 ;;
+    dnf) dnf install -y curl || return 1 ;;
+    *)   return 1 ;;
   esac
 }
 
@@ -861,11 +941,20 @@ select_port() {
 # Скачивание и установка
 # ============================================================================
 
+# _is_html_file FILE — 0, если FILE похож на HTML-страницу, а не на пакет.
+# Защита от случая, когда сервер отдаёт антибот-заглушку с кодом 200.
+_is_html_file() {
+  head -c 512 "$1" 2>/dev/null | grep -qiE '<!doctype[[:space:]]+html|<html[[:space:]>]'
+}
+
 # download_installer — скачивание инсталлятора (или использование --file);
 # задаёт INSTALLER_FILE. Устойчивый curl: докачка (-C -), отсечка медленных
 # соединений (--speed-limit/--speed-time), только IPv4 (-4), повторы при ошибках.
 download_installer() {
   if [[ -n "${OPT_FILE:-}" ]]; then
+    # относительный путь → абсолютный: без «/» apt/dnf сочтут аргумент
+    # именем пакета из репозитория, а не локальным файлом
+    [[ "$OPT_FILE" == /* ]] || OPT_FILE="$PWD/$OPT_FILE"
     if [[ -r "$OPT_FILE" && -s "$OPT_FILE" ]]; then
       if [[ "$OPT_FILE" != *".${OS_PKG_TYPE:-}" ]]; then
         lmsg msg_err_file_mismatch "${OPT_FILE##*.}" "${OS_PKG_TYPE:-}" >&2
@@ -879,40 +968,93 @@ download_installer() {
     return 1
   fi
 
-  local url="${OS_INSTALLER_URL:-}" fname dest
+  local url="${OS_INSTALLER_URL:-}" fname dest dl_base
   local curl_opts=(-fL -4 --retry 3 --retry-delay 2 \
                   --connect-timeout 30 --speed-limit 1024 --speed-time 30)
   [[ -n "$url" ]] || { lmsg msg_err_download >&2; return 1; }
   fname="${url##*/}"
-  dest="${DL_DIR:-/tmp/tcs-installer}/$fname"
-  mkdir -p "${DL_DIR:-/tmp/tcs-installer}"
+  [[ -n "$fname" ]] || { lmsg msg_err_download >&2; return 1; }
+
+  # безопасный каталог загрузки: не симлинк, наш каталог, только нам доступ
+  if [[ "${OPT_ALLOW_ENV:-0}" == "1" && -n "${DL_DIR:-}" ]]; then
+    dl_base="$DL_DIR"
+    DL_IS_TEMP=0
+  else
+    dl_base="$(mktemp -d "${TMPDIR:-/tmp}/tcs-installer.XXXXXX" 2>/dev/null)" \
+      || { lmsg msg_err_download >&2; return 1; }
+    DL_IS_TEMP=1
+  fi
+  if [[ -e "$dl_base" ]]; then
+    if [[ -L "$dl_base" ]] || ! [[ -O "$dl_base" ]]; then
+      lmsg msg_err_dl_dir "$dl_base" >&2
+      return 1
+    fi
+  else
+    # родитель не должен быть симлинком (обход через чужой каталог)
+    if [[ -L "$(dirname "$dl_base")" ]]; then
+      lmsg msg_err_dl_dir "$dl_base" >&2
+      return 1
+    fi
+    mkdir -p "$dl_base" || { lmsg msg_err_dl_dir "$dl_base" >&2; return 1; }
+    if [[ -L "$dl_base" ]] || ! [[ -O "$dl_base" ]]; then
+      lmsg msg_err_dl_dir "$dl_base" >&2
+      return 1
+    fi
+  fi
+  chmod 700 "$dl_base" 2>/dev/null || true
+  if [[ "${DL_IS_TEMP:-0}" == "0" ]]; then
+    local _dl_real
+    _dl_real="$(readlink -f "$dl_base" 2>/dev/null || true)"
+    [[ -n "$_dl_real" && "$_dl_real" == "${dl_base%/}" ]] || { lmsg msg_err_dl_dir "$dl_base" >&2; return 1; }
+  fi
+  dest="$dl_base/$fname"
+
+  DL_CACHE_DIR="$dl_base"
   lmsg msg_download_source "$url"
 
   if [[ -s "$dest" ]]; then
-    if curl "${curl_opts[@]}" -C - -o "$dest" "$url"; then
+    if curl "${curl_opts[@]}" -C - -o "$dest" "$url" && ! _is_html_file "$dest"; then
       INSTALLER_FILE="$dest"
       return 0
     fi
   fi
-  if curl "${curl_opts[@]}" -o "$dest" "$url" && [[ -s "$dest" ]]; then
+  if curl "${curl_opts[@]}" -o "$dest" "$url" && [[ -s "$dest" ]] && ! _is_html_file "$dest"; then
     INSTALLER_FILE="$dest"
     return 0
   fi
   rm -f "$dest"
+  if [[ "${DL_IS_TEMP:-0}" == "1" && -n "${DL_CACHE_DIR:-}" ]]; then
+    rm -rf "$DL_CACHE_DIR" 2>/dev/null || true
+  fi
   lmsg msg_err_download >&2
   return 1
 }
 
-# install_tcsl [FILE] — установка TCSL, администраторы через TCADMINS_USERS
+# cleanup_download — удаляет скачанный инсталлятор; временный (mktemp) каталог
+# убирается целиком, а test-каталог DL_DIR не трогаем (там могут быть свои файлы).
+cleanup_download() {
+  [[ -n "${OPT_FILE:-}" ]] && return 0
+  if [[ "${DL_IS_TEMP:-0}" == "1" ]]; then
+    rm -rf "${DL_CACHE_DIR:-}" 2>/dev/null || true
+  else
+    rm -f "${INSTALLER_FILE:-}" 2>/dev/null || true
+  fi
+}
+
+# install_tcsl [FILE] — установка TCSL, администраторы через TCADMINS_USERS.
+# DEBIAN_FRONTEND=noninteractive — чтобы apt не завис на debconf-вопросе
+# в cron/CI и неинтерактивных сценариях (--yes, EOF).
 install_tcsl() {
   local file="${1:-${INSTALLER_FILE:-}}"
   [[ -n "$file" ]] || { lmsg msg_err_install >&2; return 1; }
   case "${OS_FAMILY:-}" in
     apt)
       if [[ -n "${OPT_ADMINS:-}" ]]; then
-        TCADMINS_USERS="$OPT_ADMINS" apt-get install -y "$file" || { lmsg msg_err_install >&2; return 1; }
+        TCADMINS_USERS="$OPT_ADMINS" DEBIAN_FRONTEND=noninteractive apt-get install -y "$file" \
+          || { lmsg msg_err_install >&2; return 1; }
       else
-        apt-get install -y "$file" || { lmsg msg_err_install >&2; return 1; }
+        DEBIAN_FRONTEND=noninteractive apt-get install -y "$file" \
+          || { lmsg msg_err_install >&2; return 1; }
       fi
       ;;
     dnf)
@@ -983,13 +1125,20 @@ _mgrconf_transform() {
 # configure_port PORT [OLDPORT] — применяет порт панели управления после установки.
 # Меняет только директивы, слушающие на OLDPORT (по умолчанию 80), сохраняя
 # адрес/опции (Listen) и схему (http/https/ws в connection). Остальные не трогаются.
-# 1 при отсутствии целевой директивы.
+# 1 при отсутствии целевой директивы или конфигурационного файла.
 configure_port() {
   local port="$1"
   local oldport="${2:-80}"
   local webconf="${TC_WEB_CONF:-/opt/trueconf/server/etc/webmanager/listen.conf}"
   local mgrconf="${TC_MGR_CONF:-/opt/trueconf/server/etc/manager/manager.toml}"
-  [[ -f "$webconf" && -f "$mgrconf" ]] || return 0
+  if [[ ! -f "$webconf" ]]; then
+    lmsg msg_err_no_conf "$webconf" >&2
+    return 1
+  fi
+  if [[ ! -f "$mgrconf" ]]; then
+    lmsg msg_err_no_conf "$mgrconf" >&2
+    return 1
+  fi
 
   _rewrite_file "$webconf" _webconf_transform || return 1
   _rewrite_file "$mgrconf" _mgrconf_transform || return 1
@@ -1024,12 +1173,15 @@ validate_admins() {
 }
 
 # parse_args — разбор аргументов:
-#   --admin-users=, --yes, --port=, --file=, --help
+#   --admin-users=, --yes, --port=, --file=, --skip-update, --allow-env-hooks,
+#   --help, --version/-v
 parse_args() {
   OPT_ADMINS=""
   OPT_YES=0
   OPT_PORT=""
   OPT_FILE=""
+  OPT_SKIP_UPDATE=0
+  OPT_ALLOW_ENV=0
   local a
   for a in "$@"; do
     case "$a" in
@@ -1037,9 +1189,11 @@ parse_args() {
         OPT_ADMINS="${a#--admin-users=}"
         validate_admins "$OPT_ADMINS" || exit 1
         ;;
-      --yes)           OPT_YES=1 ;;
-      --port=*)        OPT_PORT="${a#--port=}" ;;
-      --file=*)        OPT_FILE="${a#--file=}" ;;
+      --yes)             OPT_YES=1 ;;
+      --port=*)          OPT_PORT="${a#--port=}" ;;
+      --file=*)          OPT_FILE="${a#--file=}" ;;
+      --skip-update)     OPT_SKIP_UPDATE=1 ;;
+      --allow-env-hooks) OPT_ALLOW_ENV=1 ;;
       --help|-h)       printf '%s\n' "$(_L msg_help)"; exit 0 ;;
       --version|-v)    printf 'trueconf-server-auto-installer %s\n' "$SCRIPT_VERSION"; exit 0 ;;
       *)               lmsg msg_err_bad_arg "$a" >&2; exit 1 ;;
@@ -1051,11 +1205,29 @@ parse_args() {
 # Основной поток
 # ============================================================================
 
+# _on_exit — EXIT-обработчик: убирает временный каталог загрузки (в т.ч.
+# при сбое установки). Сигналы HUP/INT/TERM завершаются через exit,
+# поэтому проходят здесь же.
+_on_exit() {
+  cleanup_download
+}
+
 main() {
   set -uo pipefail
 
   detect_lang
   parse_args "$@" || exit 1
+
+  # уборка и восстановление при любом выходе, включая обрыв сессии/сигналы
+  trap '_on_exit' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  # По умолчанию игнорируем тестовые env-хуки (безопасно при sudo с пробросом env)
+  if [[ "${OPT_ALLOW_ENV:-0}" != "1" ]]; then
+    unset DL_DIR TC_APT_FILES TC_DNF_FILES TC_WEB_CONF TC_MGR_CONF
+  fi
 
   if [[ "$(id -u)" -ne 0 ]]; then
     lmsg msg_err_root >&2
@@ -1086,19 +1258,23 @@ main() {
   fi
 
   step msg_step_update
-  update_packages || exit 1
+  if [[ "${OPT_SKIP_UPDATE:-0}" == "1" ]]; then
+    lmsg msg_update_skipped
+  else
+    update_packages || exit 1
+  fi
 
   step msg_step_port
   select_port || exit 1
 
   step msg_step_download
+  if [[ -z "${OPT_FILE:-}" ]]; then
+    ensure_curl || exit 1
+  fi
   download_installer || exit 1
 
   step msg_step_install
   install_tcsl || exit 1
-  if [[ -z "${OPT_FILE:-}" ]]; then
-    rm -f "${INSTALLER_FILE:-}" 2>/dev/null || true
-  fi
   lmsg msg_install_done
 
   if [[ "${PANEL_PORT:-80}" != "80" ]]; then
@@ -1109,6 +1285,7 @@ main() {
   printf '\n%s\n' "$(_L msg_success)"
   lmsg msg_panel_url "$(hostname)" "${PANEL_PORT:-80}"
   printf '%s\n' "$(_L msg_register_reminder)"
+  printf '%s\n' "$(_L msg_https_reminder)"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
