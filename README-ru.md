@@ -47,22 +47,24 @@
 > [!NOTE]
 > Привилегированные операции (пакетный менеджер, перезапуск служб, запись в
 > `/etc` и `/opt`) выполняются через `sudo`, поэтому скрипт можно запускать от
-> обычного пользователя — в том числе через pipe (`curl ... | bash`). Запуск
-> всей команды через `sudo` тоже работает.
+> обычного пользователя — в том числе через pipe (`curl ... | bash`).
 
 ```sh
-curl -LsSf https://trueconf.ru/go/install.sh | sudo bash
+curl -LsSf https://trueconf.com/go/install.sh | bash
 ```
 
 или запустите с аргументами:
 
 ```sh
 # 1.
-curl -LsSf https://trueconf.ru/go/install.sh -o install.sh
+curl -LsSf https://trueconf.com/go/install.sh -o install.sh
 
 # 2.
-sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--allow-env-hooks] [--help] [--version] 
+bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--allow-env-hooks] [--help] [--version] 
 ```
+
+`sudo` не обязателен: скрипт сам запрашивает его для привилегированных
+операций, либо можно сразу запустить ту же команду через `sudo`.
 
 | Параметр | Назначение |
 |---|---|

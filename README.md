@@ -51,11 +51,10 @@ TrueConf Server (the TrueConf Server for Linux installer) from the TrueConf webs
 > [!NOTE]
 > Privileged operations (package manager, service restart, writes to `/etc`
 > and `/opt`) are executed through `sudo`, so the script can be started by a
-> regular user — including through a pipe (`curl ... | bash`). Running the
-> whole command under `sudo` also works.
+> regular user — including through a pipe (`curl ... | bash`).
 
 ```sh
-curl -LsSf https://trueconf.com/go/install.sh | sudo bash
+curl -LsSf https://trueconf.com/go/install.sh | bash
 ```
 
 or with args:
@@ -65,8 +64,11 @@ or with args:
 curl -LsSf https://trueconf.com/go/install.sh -o install.sh
 
 # 2.
-sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--allow-env-hooks] [--help] [--version] 
+bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--allow-env-hooks] [--help] [--version] 
 ```
+
+`sudo` is optional: the script requests it itself for privileged operations,
+or you can run the same command with `sudo` right away.
 
 | Option | Purpose |
 |---|---|
