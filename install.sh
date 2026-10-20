@@ -7,8 +7,9 @@
 #   РЕД ОС 7.3/8, Альт Сервер 10/c10f2/11  (только x86_64)
 #
 # Запуск / Usage:
-#   sudo bash install.sh [--admin-users=a,b] [--yes] [--port=NNNN]
-#                        [--file=ФАЙЛ] [--version] [--help]
+#   bash install.sh [--admin-users=a,b] [--yes] [--port=NNNN]
+#                   [--file=ФАЙЛ] [--version] [--help]
+#   (sudo запрашивается автоматически для привилегированных операций)
 
 # Версия скрипта (хардкод) / Script version (hardcoded)
 SCRIPT_VERSION="1.1"
@@ -84,7 +85,8 @@ MSG_RU=(
   [msg_err_filemode]="Не удалось сохранить режим файла: %s."
   [msg_err_no_conf]="Конфигурационный файл панели не найден: %s. Порт не изменён — проверьте установленный пакет."
 
-  [msg_help]="Использование: sudo bash install.sh [--admin-users=имя1,имя2] [--yes] [--port=NNNN] [--file=ФАЙЛ] [--skip-update] [--version] [--help]
+  [msg_help]="Использование: bash install.sh [--admin-users=имя1,имя2] [--yes] [--port=NNNN] [--file=ФАЙЛ] [--skip-update] [--version] [--help]
+  (sudo запрашивается автоматически для привилегированных операций)
 
   --admin-users=имя1,имя2  пользователи ОС с доступом к панели управления
   --yes                    без вопросов (при занятом порту 80 берётся первый свободный начиная с 8888)
@@ -152,7 +154,8 @@ MSG_EN=(
   [msg_err_filemode]="Failed to preserve file mode: %s."
   [msg_err_no_conf]="Web panel configuration file not found: %s. Port was not changed — check the installed package."
 
-  [msg_help]="Usage: sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--version] [--help]
+  [msg_help]="Usage: bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=FILE] [--skip-update] [--version] [--help]
+  (sudo is requested automatically for privileged operations)
 
   --admin-users=user1,user2  OS users with web panel access
   --yes                     non-interactive (if port 80 is busy, first free port from 8888 is used)
