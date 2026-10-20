@@ -46,7 +46,13 @@ TrueConf Server (the TrueConf Server for Linux installer) from the TrueConf webs
 ## Usage
 
 > [!IMPORTANT]
-> Administrator (root) privileges are required to run the command.
+> Administrator (root) privileges are required for the installation.
+
+> [!NOTE]
+> Privileged operations (package manager, service restart, writes to `/etc`
+> and `/opt`) are executed through `sudo`, so the script can be started by a
+> regular user — including through a pipe (`curl ... | bash`). Running the
+> whole command under `sudo` also works.
 
 ```sh
 curl -LsSf https://trueconf.com/go/install.sh | sudo bash
@@ -75,7 +81,8 @@ sudo bash install.sh [--admin-users=user1,user2] [--yes] [--port=NNNN] [--file=F
 
 ## What the script does
 
-1. Checks that it is run as root.
+1. Performs privileged operations through `sudo` (works both as root and as a
+   regular user with sudo access).
 2. Detects the OS from `/etc/os-release`; an unsupported OS or architecture
    (other than x86_64) results in a message and exit.
 3. Checks that the `trueconf` user does not exist (the installer creates it
